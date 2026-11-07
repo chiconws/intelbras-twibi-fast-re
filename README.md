@@ -125,6 +125,14 @@ Conector 2×2 na placa. A ordem real (descoberta medindo continuidade e testando
 Console em `115200 8N1`. O adaptador deve estar em **3,3 V**; **nunca** conecte o VCC
 dele ao pad 3.
 
+### Disaster mode + TFTP (por cabo Ethernet)
+
+Antes de tudo: **a UART é só o console** — é por ela que você vê o boot e digita
+comandos. A **imagem do firmware não passa pela UART**: ela é enviada por **cabo de
+rede**, usando TFTP (o bootloader sobe um servidor TFTP em `192.168.1.6` e você empurra
+o arquivo pelo PC). São dois canais separados: UART para enxergar/diagnosticar, Ethernet
+para transferir.
+
 ### Disaster mode + TFTP
 
 Segurando o reset **no power-on**, o bootloader entra em modo de recuperação
@@ -221,6 +229,11 @@ images/          fotos da placa, UART e flash
 Ghidra (descompilação do bootloader e do firmware), binwalk/unsquashfs, U-Boot
 `mkimage` (referência), musl-cross (compilação estática do dropbear e do servidor web),
 tftpy e um adaptador FTDI 3,3 V.
+
+## Créditos
+
+Projeto realizado com o auxílio do **DeepSeek** — engenharia reversa do firmware,
+recuperação do aparelho, desenvolvimento do firmware customizado e desta documentação.
 
 ## Licença
 

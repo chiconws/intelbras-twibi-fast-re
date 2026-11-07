@@ -68,7 +68,11 @@ Para abrir o console, qualquer terminal serial serve:
 4. Soltar: o console mostra `Entry disaster mode` e o bootloader sobe o TFTP em
    **`192.168.1.6`** (padrão Realtek).
 
-## 4. Enviar a imagem
+## 4. Enviar a imagem (cabo Ethernet, não UART)
+
+A transferência é feita **pelo cabo de rede**: o PC fica na faixa `192.168.1.0/24`, o
+bootloader escuta TFTP em `192.168.1.6` e recebe o arquivo. A **UART não transporta a
+imagem** — ela serve apenas para ver o console e acompanhar o processo.
 
 O arquivo enviado é o **payload do `.bin` oficial sem o cabeçalho uImage de 64 bytes**:
 
