@@ -210,6 +210,17 @@ Detalhes: [`docs/firmware.md`](docs/firmware.md).
 
 ---
 
+## Firmwares
+
+As imagens estão em [`firmware/`](firmware/):
+
+- **`twibi_fast_1.1.11.bin`** — firmware oficial (Intelbras), para restaurar de fábrica
+- **`chiconws-v20.bin`** — o firmware customizado deste projeto
+
+A gravação é pelo **disaster mode + TFTP**, enviando a imagem **sem os 64 bytes do
+cabeçalho uImage** (o `firmware/README.md` mostra o comando). Detalhes em
+[`docs/recovery.md`](docs/recovery.md).
+
 ## Estrutura do repositório
 
 ```
@@ -222,6 +233,7 @@ tools/
   tftp_put.py        envia a imagem no disaster mode
   unpack_kernel.py   extrai o kernel do container cr6c
 images/          fotos da placa, UART e flash
+firmware/        imagens .bin (oficial e chiconws) + instruções
 ```
 
 ## Ferramentas usadas

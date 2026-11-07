@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
-*.bin
 *.squashfs
 *.html
+# payloads gerados localmente (as imagens .bin ficam em firmware/)
+/payload*.bin
