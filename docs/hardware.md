@@ -1,67 +1,69 @@
 # Hardware
 
-## Placa
+**English** | [Português](hardware.pt-BR.md)
 
-- Placa ~79 × 79 mm, cantos chanfrados, 4 furos de fixação
-- SoC **Realtek RTL8197FNT** (MIPS 24Kc @ 600 MHz, DRAM DDR2 64 MB **no pacote**)
-  sob um dissipador
-- Rádio 5 GHz **RTL8812BRH** (802.11ac 2×2), 2.4 GHz integrado ao SoC
-- Flash SPI **8 MB** — BOHONG **BH25Q64**
-- 2 portas Ethernet 100 Mbps (uma delas é **WAN/LAN automática**)
-- Alimentação **9 V / 1 A**, jack DC **centro positivo**
+## Board
 
-Bancada e face inferior:
+- ~79 × 79 mm PCB, chamfered corners, 4 mounting holes
+- **Realtek RTL8197FNT** SoC (MIPS 24Kc @ 600 MHz, 64 MB DDR2 **in-package**) under a
+  heatsink
+- **RTL8812BRH** 5 GHz radio (802.11ac 2×2), 2.4 GHz integrated in the SoC
+- **8 MB** SPI flash — BOHONG **BH25Q64**
+- 2× 100 Mbps Ethernet ports (one of them is **auto WAN/LAN**)
+- **9 V / 1 A** supply, DC jack **center positive**
+
+Top and bottom sides:
 
 <p align="center">
-  <img src="../images/board.jpg" width="430" alt="Placa (face superior)">
-  <img src="../images/board-bottom.jpg" width="430" alt="Placa (face inferior)">
+  <img src="../images/board.jpg" width="430" alt="Board (top side)">
+  <img src="../images/board-bottom.jpg" width="430" alt="Board (bottom side)">
 </p>
 
-Detalhes dos chips:
+Chip close-ups:
 
 <p align="center">
   <img src="../images/soc-rtl8197fnt.jpg" width="300" alt="RTL8197FNT">
   <img src="../images/soc-rtl8812brh.jpg" width="300" alt="RTL8812BRH">
 </p>
 
-## Alimentação
+## Power
 
-O sleeve do jack tem continuidade com o GND da placa — ou seja, **centro positivo**.
-Medido em vazio: ~9,35 V. O consumo do aparelho fica abaixo de 1 A.
+The jack sleeve has continuity with the board GND — that is, **center positive**.
+Measured unloaded: ~9.35 V. The device draws well under 1 A.
 
 ## UART
 
-O console serial da placa. É acessado com um adaptador **USB → serial FTDI232**, em
-**3,3 V**, ligando apenas **GND, TX e RX** (o VCC do adaptador não é usado — a placa tem
-fonte própria). Pads 2×2, `115200 8N1`:
+The board's serial console. Accessed with a **USB → serial FTDI232** adapter at **3.3 V**,
+wiring only **GND, TX and RX** (the adapter VCC is not used — the board has its own
+supply). 2×2 pads, `115200 8N1`:
 
 <p align="center">
-  <img src="../images/uart-pinout.jpg" width="380" alt="Pads do UART">
+  <img src="../images/uart-pinout.jpg" width="380" alt="UART pads">
 </p>
 
-| Pad | Sinal |
+| Pad | Signal |
 |---|---|
 | 1 | GND |
-| 2 | RX (entrada da placa) |
-| 3 | VCC 3,3 V — não ligar |
-| 4 | TX (saída da placa) |
+| 2 | RX (board input) |
+| 3 | VCC 3.3 V — do not connect |
+| 4 | TX (board output) |
 
 ## Flash
 
-SOIC-8 **BH25Q64** (8 MB / 64 KB de setor). Para leitura/gravação direta com clipe
-SOIC-8 + CH341A, a pinagem é a padrão (pino 1 = ponto, contagem anti-horária):
+SOIC-8 **BH25Q64** (8 MB / 64 KB sectors). For direct read/write with a SOIC-8 clip +
+CH341A the pinout is standard (pin 1 = dot, counter-clockwise):
 
 <p align="center">
-  <img src="../images/flash-pinout.jpg" width="320" alt="Pinagem da flash">
+  <img src="../images/flash-pinout.jpg" width="320" alt="Flash pinout">
 </p>
 
-- pino 8 = VCC (3,3 V)
-- pino 4 = GND
-- pino 1 = CS
+- pin 8 = VCC (3.3 V)
+- pin 4 = GND
+- pin 1 = CS
 
-O layout das partições está em [`recovery.md`](recovery.md#5-layout-da-flash-8-mb).
+The partition layout is in [`recovery.md`](recovery.md#5-flash-layout-8-mb).
 
-## Boot log (resumo)
+## Boot log (summary)
 
 ```
 DRAM Type: DDR2, 533MHz, Size: 64MB
@@ -72,23 +74,23 @@ Kernel code size:0x1ed412
 9 rtkxxpart partitions found on MTD device m25p80
 ```
 
-O kernel usa **squashfs 4.0 (xz)** e o bootloader valida o rootfs por checksum
-(ver `recovery.md`).
+The kernel uses **squashfs 4.0 (xz)** and the bootloader validates the rootfs by checksum
+(see `recovery.md`).
 
-## Switch / rede
+## Switch / network
 
-O switch integrado (RTL865x) é visível em `/proc/rtl865x/` (`port_status`, `vlan`,
-`arp`, `l3`, `ip`, `netif`). Ele faz **roteamento e NAPT em hardware**:
+The integrated switch (RTL865x) is visible under `/proc/rtl865x/` (`port_status`, `vlan`,
+`arp`, `l3`, `ip`, `netif`). It does **hardware routing and NAPT**:
 
 - `VID 9` → LAN (`br0`)
 - `VID 8` → WAN (`eth1`)
-- Tabela L3 com `192.168.6.0/24` (LAN), `192.168.1.0/24` (WAN) e default via WAN
+- L3 table with `192.168.6.0/24` (LAN), `192.168.1.0/24` (WAN) and a default via WAN
 
-É por isso que uma sub-rede extra só funciona até o próprio roteador — o tráfego
-encaminhado para fora morre no switch, que não tem entrada L3/NAPT para ela.
+That is why an extra subnet only works up to the router itself — forwarded traffic dies in
+the switch, which has no L3/NAPT entry for it.
 
-## LED
+## LEDs
 
-Dois LEDs na borda da placa (D9/D6), próximos ao conector, usados como indicador
-frontal. O LED de estado do firmware fica fixo quando o boot falha — foi o sintoma
-inicial do aparelho brickado.
+Two LEDs on the board edge (D9/D6), next to the connector, used as the front indicator.
+The firmware's status LED stays steady when boot fails — that was the first symptom of the
+bricked unit.

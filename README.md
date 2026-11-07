@@ -1,98 +1,101 @@
-# Intelbras Twibi Fast — engenharia reversa e firmware customizado
+# Intelbras Twibi Fast — reverse engineering & custom firmware
 
-Roteador mesh **Intelbras Twibi Fast** (OEM **Tenda**, plataforma **Realtek RTL8197F**):
-engenharia reversa do firmware original, recuperação de uma unidade "brickada" e
-firmware próprio com SSH, sem nuvem e com controle de internet por faixa de IP.
+**English** | [Português](README.pt-BR.md)
 
-> ⚠️ Projeto pessoal, educacional, feito **no meu próprio aparelho** (uma unidade de
-> sacrifício). Não é afiliado à Intelbras nem à Tenda. Mexer no firmware **anula a
-> garantia** e pode inutilizar o aparelho — se for repetir, faça por sua conta e risco.
+Mesh router **Intelbras Twibi Fast** (OEM **Tenda**, **Realtek RTL8197F** platform):
+reverse engineering of the stock firmware, recovery of a bricked unit, and a custom
+firmware with SSH, no cloud, and per-IP-range internet control.
+
+> ⚠️ Personal, educational project done **on my own device** (a sacrificial unit). Not
+> affiliated with Intelbras or Tenda. Flashing firmware **voids the warranty** and can
+> brick the device — if you repeat any of this, you do it at your own risk.
 
 ---
 
 ## TL;DR
 
-- O Twibi Fast é um **RTL8197F + RTL8812BRH**, 8 MB de flash, 64 MB de DDR2, Linux 3.10.90.
-- Uma unidade parou de bootar (`rootfs checksum error`) — era **rootfs truncado** por
-  uma atualização interrompida.
-- Recuperei pela **UART** (115200) + **disaster mode** do bootloader + **TFTP**.
-- Decifrei o **checksum do rootfs** que o bootloader valida (soma de 16 bits).
-- Construí um **firmware próprio** (`chiconws`) mantendo o kernel oficial:
-  SSH no lugar do telnet, sem nuvem/TR-069, branding próprio, faixa de IP para IoT com
-  internet ligável/desligável, página web e API JSON.
+- The Twibi Fast is an **RTL8197F + RTL8812BRH**, 8 MB flash, 64 MB DDR2, Linux 3.10.90.
+- One unit stopped booting (`rootfs checksum error`) — it was a **truncated rootfs**
+  from an interrupted update.
+- I recovered it through the **UART** (115200) + the bootloader's **disaster mode** + **TFTP**.
+- I reverse engineered the **rootfs checksum** the bootloader validates (a 16-bit sum).
+- I built a **custom firmware** (`chiconws`) keeping the stock kernel: SSH instead of
+  telnet, no cloud/TR-069, custom branding, an IoT IP range with internet on/off, a web
+  page and a JSON API.
 
 ---
 
-## Antes de tudo: o que é UART e o que é o FTDI232
+## First things first: what UART and the FTDI232 are
 
-**UART** é a "porta serial" do aparelho — um **console de texto** que existe desde o
-primeiro programa (o bootloader), antes de qualquer rede ou sistema operacional. Em vez
-de teclado e monitor, você liga **três fios** (GND, TX, RX) a um adaptador no PC e
-passa a ver e digitar o que o roteador vê durante o boot. É o que salvou este aparelho:
-com a flash corrompida, era o único canal que ainda respondia.
+**UART** is the device's "serial port" — a **text console** that exists from the very
+first program (the bootloader), before any network or operating system. Instead of a
+keyboard and monitor, you wire **three wires** (GND, TX, RX) to an adapter on your PC and
+start seeing and typing what the router sees during boot. It is what saved this device:
+with a corrupted flash, it was the only channel still responding.
 
-**FTDI232** (chip **FT232RL**) é o **adaptador USB → serial**: de um lado o USB do PC
-(aparece como `/dev/ttyUSB0`), do outro três pinos que vão nos pads da placa. É vendido
-como "adaptador FTDI FT232RL" (aqueles módulos com jumper **3,3 V / 5 V**). Ele **não**
-alimenta a placa: o Twibi usa a própria fonte de 9 V; do adaptador vêm só os sinais.
+**FTDI232** (chip **FT232RL**) is the **USB → serial adapter**: the PC side plugs into USB
+(shows up as `/dev/ttyUSB0`), the other side has three pins that go to the board pads. It
+is sold as "FTDI FT232RL adapter" (the modules with a **3.3 V / 5 V** jumper). It does
+**not** power the board: the Twibi uses its own 9 V supply; the adapter only carries the
+signals.
 
 <p align="center">
-  <img src="images/uart-pads.jpg" width="360" alt="Pads do UART na placa">
+  <img src="images/uart-pads.jpg" width="360" alt="UART pads on the board">
 </p>
 
-| Pad da placa | Sinal | Vai no adaptador |
+| Board pad | Signal | Goes to the adapter |
 |---|---|---|
-| 1 | GND | GND (ligue **primeiro**) |
-| 2 | RX (entrada) | TX do adaptador |
-| 3 | VCC 3,3 V | **nada** |
-| 4 | TX (saída) | RX do adaptador |
+| 1 | GND | GND (connect **first**) |
+| 2 | RX (input) | adapter TX |
+| 3 | VCC 3.3 V | **nothing** |
+| 4 | TX (output) | adapter RX |
 
-Detalhes: adaptador em **3,3 V**, console em **115200 8N1**, `TX ↔ RX` cruzados e
-GND comum. Qualquer terminal serial serve (PuTTY, `picocom`, `minicom`, `screen`) — e
-este repo inclui um em Python (`tools/` do projeto completo).
+Details: adapter set to **3.3 V**, console at **115200 8N1**, `TX ↔ RX` crossed and a
+common GND. Any serial terminal works (PuTTY, `picocom`, `minicom`, `screen`) — and this
+repo includes a Python one (see the full project's `tools/`).
 
-## Glossário rápido
+## Quick glossary
 
-| Termo | O que é |
+| Term | What it is |
 |---|---|
-| **UART** | console serial da placa (texto, 3 fios) |
-| **FTDI232** | adaptador USB ↔ serial usado para falar com a UART |
-| **TFTP** | protocolo simples de transferência de arquivo (UDP); o bootloader escuta em `192.168.1.6` |
-| **Bootloader** | primeiro programa da flash: inicializa a RAM, carrega o kernel e tem o modo de recuperação |
-| **uImage** | cabeçalho de 64 bytes que embrulha a imagem do firmware |
-| **squashfs** | sistema de arquivos comprimido e somente-leitura usado no rootfs |
-| **rootfs** | a "raiz" do Linux: todos os arquivos do firmware |
-| **checksum** | soma de verificação que o bootloader usa para validar o rootfs |
-| **CFM** | partição de configuração persistente do firmware (chaves `chave=valor`) |
+| **UART** | the board's serial console (text, 3 wires) |
+| **FTDI232** | USB ↔ serial adapter used to talk to the UART |
+| **TFTP** | simple file-transfer protocol (UDP); the bootloader listens on `192.168.1.6` |
+| **Bootloader** | first program in flash: inits RAM, loads the kernel, has the recovery mode |
+| **uImage** | 64-byte header that wraps the firmware image |
+| **squashfs** | compressed, read-only filesystem used by the rootfs |
+| **rootfs** | the Linux "root": all files of the firmware |
+| **checksum** | verification sum the bootloader uses to validate the rootfs |
+| **CFM** | persistent configuration partition of the firmware (`key=value` entries) |
 
 ---
 
 ## Hardware
 
-| Item | Detalhe |
+| Item | Detail |
 |---|---|
-| SoC | Realtek **RTL8197FNT** — MIPS 24Kc @ 600 MHz, DRAM DDR2 64 MB no pacote |
+| SoC | Realtek **RTL8197FNT** — MIPS 24Kc @ 600 MHz, 64 MB DDR2 **in-package** |
 | 5 GHz | **RTL8812BRH** (802.11ac 2×2) |
-| 2.4 GHz | rádio integrado do RTL8197F |
+| 2.4 GHz | radio integrated into the RTL8197F |
 | Flash | 8 MB SPI (BOYAMICRO/BOHONG **BH25Q64**) |
-| Ethernet | 2× 100 Mbps (uma porta é WAN/LAN automática) |
-| Alimentação | 9 V / 1 A, **centro positivo** |
+| Ethernet | 2× 100 Mbps (one port is auto WAN/LAN) |
+| Power | 9 V / 1 A, **center positive** |
 
 <p align="center">
-  <img src="images/board.jpg" width="520" alt="Placa do Twibi Fast">
+  <img src="images/board.jpg" width="520" alt="Twibi Fast board">
 </p>
 
-Fotos do SoC e do rádio 5 GHz: [`images/soc-rtl8197fnt.jpg`](images/soc-rtl8197fnt.jpg),
+SoC and 5 GHz radio photos: [`images/soc-rtl8197fnt.jpg`](images/soc-rtl8197fnt.jpg),
 [`images/soc-rtl8812brh.jpg`](images/soc-rtl8812brh.jpg).
 
 ---
 
-## O aparelho brickado e a recuperação
+## The bricked unit and the recovery
 
-Sintoma: LED fixo, link de rede ativo mas **RX = 0** (não transmitia), sem DHCP, sem
-SSID, botão de reset sem efeito.
+Symptoms: LED steady on, network link up but **RX = 0** (not transmitting), no DHCP, no
+SSID, reset button doing nothing.
 
-Pela UART apareceu a causa:
+The UART showed the cause:
 
 ```
 Booting...
@@ -104,40 +107,37 @@ rootfs checksum error at 0021D012!
 <RealTek>
 ```
 
-O firmware do aparelho estava com o **rootfs truncado** (só ~256 KB de 3,4 MB) — o
-bootloader rodava, mas recusava o rootfs e parava no prompt.
+The device had a **truncated rootfs** (only ~256 KB of 3.4 MB written) — the bootloader
+ran fine, but refused the rootfs and stopped at its prompt.
 
 ### UART
 
-Conector 2×2 na placa. A ordem real (descoberta medindo continuidade e testando):
+2×2 connector on the board. The actual order (found by continuity tests and trial):
 
 <p align="center">
-  <img src="images/uart-pinout.jpg" width="420" alt="Pads do UART">
+  <img src="images/uart-pinout.jpg" width="420" alt="UART pads">
 </p>
 
-| Pad | Sinal |
+| Pad | Signal |
 |---|---|
 | 1 | **GND** |
-| 2 | **RX** (entrada da placa — vai no TX do adaptador) |
-| 3 | **VCC 3,3 V** — **não ligar** |
-| 4 | **TX** (saída da placa — vai no RX do adaptador) |
+| 2 | **RX** (board input — goes to adapter TX) |
+| 3 | **VCC 3.3 V** — **do not connect** |
+| 4 | **TX** (board output — goes to adapter RX) |
 
-Console em `115200 8N1`. O adaptador deve estar em **3,3 V**; **nunca** conecte o VCC
-dele ao pad 3.
+Console at `115200 8N1`. The adapter must be at **3.3 V**; **never** connect its VCC to
+pad 3.
 
-### Disaster mode + TFTP (por cabo Ethernet)
+### Disaster mode + TFTP (over the Ethernet cable)
 
-Antes de tudo: **a UART é só o console** — é por ela que você vê o boot e digita
-comandos. A **imagem do firmware não passa pela UART**: ela é enviada por **cabo de
-rede**, usando TFTP (o bootloader sobe um servidor TFTP em `192.168.1.6` e você empurra
-o arquivo pelo PC). São dois canais separados: UART para enxergar/diagnosticar, Ethernet
-para transferir.
+First of all: **the UART is just the console** — that is how you see the boot and type
+commands. The **firmware image does not travel over UART**: it is sent over the **network
+cable** using TFTP (the bootloader starts a TFTP server on `192.168.1.6` and you push the
+file from the PC). Two separate channels: UART to watch/diagnose, Ethernet to transfer.
 
-### Disaster mode + TFTP
-
-Segurando o reset **no power-on**, o bootloader entra em modo de recuperação
-(`Entry disaster mode`) e sobe um servidor **TFTP em `192.168.1.6`**. Enviando a imagem
-com o cabeçalho uImage removido (6.378.516 bytes), ele valida e grava sozinho:
+Holding reset **while powering on** makes the bootloader enter recovery mode
+(`Entry disaster mode`) and start a **TFTP server on `192.168.1.6`**. Sending the image
+without the uImage header (6,378,516 bytes), it validates and flashes by itself:
 
 ```
 Linux kernel (root-fs) upgrade.
@@ -148,14 +148,14 @@ burn rootfs ...
 reboot.......
 ```
 
-Detalhes do procedimento: [`docs/recovery.md`](docs/recovery.md).
+Full procedure: [`docs/recovery.md`](docs/recovery.md).
 
 ---
 
-## O checksum do rootfs (decifrado)
+## The rootfs checksum (decrypted)
 
-O bootloader valida o rootfs com uma soma simples, descoberta descompilando o segundo
-estágio dele:
+The bootloader validates the rootfs with a simple sum, found by decompiling its second
+stage:
 
 ```
 len = bswap32(*(u32 *)(rootfs + 8)) + 0x282;
@@ -165,88 +165,87 @@ for (i = 0; i < len; i += 2)
 if (sum != 0) -> "rootfs checksum error"
 ```
 
-Ou seja: **soma de 16 bits (big-endian) que tem que dar zero**; os 2 bytes finais são o
-complemento. O campo em `squashfs+8` guarda `tamanho_total - 0x282`.
+In other words: a **16-bit big-endian sum that must be zero**; the last 2 bytes are the
+complement. The field at `squashfs+8` holds `total_size - 0x282`.
 
-A ferramenta [`tools/mkimage_twibi.py`](tools/mkimage_twibi.py) recalcula isso e produz
-uma imagem aceita pelo bootloader — o round-trip com a imagem oficial é byte a byte
-idêntico.
+[`tools/mkimage_twibi.py`](tools/mkimage_twibi.py) recomputes it and produces an image the
+bootloader accepts — the round-trip against the official image is byte-for-byte identical.
 
 ---
 
-## Firmware `chiconws`
+## The `chiconws` firmware
 
-Firmware próprio montado sobre o rootfs oficial (mesmo kernel, mesma partição), com:
+A custom firmware built on top of the stock rootfs (same kernel, same partition):
 
-| Recurso | Original | `chiconws` |
+| Feature | Stock | `chiconws` |
 |---|---|---|
-| Acesso remoto | telnet (texto claro) | **SSH** (dropbear estático) |
-| Nuvem Tenda (`ucloud`) | ativo | removido |
-| TR-069 (`cwmpd`) | ativo | removido |
-| Reboot diário (03:00) | ativo | desligado |
+| Remote access | telnet (plaintext) | **SSH** (static dropbear) |
+| Tenda cloud (`ucloud`) | enabled | removed |
+| TR-069 (`cwmpd`) | enabled | removed |
+| Daily reboot (03:00) | enabled | disabled |
 | Hostname / banner / web | Intelbras | `chiconws` |
-| Faixa IoT `192.168.6.200-254` | — | internet **ligável/desligável** |
-| Página web + API JSON | — | `http://twibi.lan:8080/` |
+| IoT range `192.168.6.200-254` | — | internet **on/off** |
+| Web page + JSON API | — | `http://twibi.lan:8080/` |
 
 <p align="center">
-  <img src="images/board-bottom.jpg" width="520" alt="Face inferior da placa">
+  <img src="images/board-bottom.jpg" width="520" alt="Board bottom side">
 </p>
 
-Detalhes: [`docs/firmware.md`](docs/firmware.md).
+Details: [`docs/firmware.md`](docs/firmware.md).
 
 ---
 
-## Limitações conhecidas
+## Known limitations
 
-- **Sem VLANs 802.1Q**: o switch RTL865x faz o roteamento/NAT **em hardware** e só
-  conhece a LAN e a WAN. Criar uma sub-rede separada como alias na bridge funciona só
-  para o próprio roteador — tráfego encaminhado morre no switch. Por isso o controle de
-  internet é feito por **faixa de IP na própria LAN** (via iptables).
-- **Temperatura**: não há sensor de temperatura do SoC exposto no Linux. O
-  `/proc/wlan0/thermal` (medidor "thermal meter" da Realtek) é um **ADC relativo**, útil
-  para tendência, não em °C.
-- **Tailscale no roteador**: inviável (44 MB de RAM, ~1,4 MB livres no rootfs, sem
-  `/dev/net/tun`). O caminho é usar uma RPi como subnet router.
+- **No 802.1Q VLANs**: the RTL865x switch does routing/NAT **in hardware** and only knows
+  the LAN and the WAN. A separate subnet as a bridge alias only works towards the router
+  itself — forwarded traffic dies in the switch. That is why internet control is done by
+  **IP range on the LAN itself** (iptables).
+- **Temperature**: there is no SoC temperature sensor exposed in Linux. The
+  `/proc/wlan0/thermal` (Realtek "thermal meter") is a **relative ADC**, useful for trends,
+  not °C.
+- **Tailscale on the router**: not viable (44 MB RAM, ~1.4 MB free in the rootfs, no
+  `/dev/net/tun`). The way is to use a Raspberry Pi as a subnet router.
 
 ---
 
 ## Firmwares
 
-As imagens estão em [`firmware/`](firmware/):
+The images are in [`firmware/`](firmware/):
 
-- **`twibi_fast_1.1.11.bin`** — firmware oficial (Intelbras), para restaurar de fábrica
-- **`chiconws-v20.bin`** — o firmware customizado deste projeto
+- **`twibi_fast_1.1.11.bin`** — official (Intelbras) firmware, to restore factory state
+- **`chiconws-v20.bin`** — the custom firmware from this project
 
-A gravação é pelo **disaster mode + TFTP**, enviando a imagem **sem os 64 bytes do
-cabeçalho uImage** (o `firmware/README.md` mostra o comando). Detalhes em
+Flashing is done via **disaster mode + TFTP**, sending the image **without the 64-byte
+uImage header** (`firmware/README.md` shows the command). Details in
 [`docs/recovery.md`](docs/recovery.md).
 
-## Estrutura do repositório
+## Repository layout
 
 ```
 docs/
-  recovery.md    recuperação (UART, disaster mode, TFTP, checksum)
-  firmware.md    como o chiconws foi montado e gravado
-  hardware.md    placa, chips, pinagens, alimentação
+  recovery.md    recovery (UART, disaster mode, TFTP, checksum)
+  firmware.md    how chiconws was built and flashed
+  hardware.md    board, chips, pinouts, power
 tools/
-  mkimage_twibi.py   monta a imagem com o checksum correto
-  tftp_put.py        envia a imagem no disaster mode
-  unpack_kernel.py   extrai o kernel do container cr6c
-images/          fotos da placa, UART e flash
-firmware/        imagens .bin (oficial e chiconws) + instruções
+  mkimage_twibi.py   builds the image with the correct checksum
+  tftp_put.py        sends the image in disaster mode
+  unpack_kernel.py   extracts the kernel from the cr6c container
+images/          board, UART and flash photos
+firmware/        .bin images (official and chiconws) + instructions
 ```
 
-## Ferramentas usadas
+## Tools used
 
-Ghidra (descompilação do bootloader e do firmware), binwalk/unsquashfs, U-Boot
-`mkimage` (referência), musl-cross (compilação estática do dropbear e do servidor web),
-tftpy e um adaptador FTDI 3,3 V.
+Ghidra (bootloader and firmware decompilation), binwalk/unsquashfs, U-Boot `mkimage` (as
+a reference), musl-cross (static builds of dropbear and the web server), tftpy and a 3.3 V
+FTDI adapter.
 
-## Créditos
+## Credits
 
-Projeto realizado com o auxílio do **DeepSeek** — engenharia reversa do firmware,
-recuperação do aparelho, desenvolvimento do firmware customizado e desta documentação.
+Project carried out with the help of **DeepSeek** — firmware reverse engineering, device
+recovery, custom firmware development and this documentation.
 
-## Licença
+## License
 
-MIT — veja [`LICENSE`](LICENSE).
+MIT — see [`LICENSE`](LICENSE).

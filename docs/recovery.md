@@ -1,15 +1,17 @@
-# Recuperação do Twibi Fast (disaster mode + TFTP)
+# Twibi Fast recovery (disaster mode + TFTP)
 
-Procedimento usado para ressuscitar uma unidade que não bootava
-(`rootfs checksum error`), e também para gravar qualquer firmware novo.
+**English** | [Português](recovery.pt-BR.md)
 
-## 1. Sintoma do brick
+Procedure used to resurrect a unit that would not boot (`rootfs checksum error`), and
+also to flash any new firmware.
 
-- LED fixo, sem SSID, sem DHCP
-- Link de rede ativo, mas **0 bytes recebidos** (não transmitia)
-- Botão de reset sem efeito (quem lê o botão é o firmware, não o hardware)
+## 1. Brick symptoms
 
-No console UART:
+- LED steady on, no SSID, no DHCP
+- Network link up but **0 bytes received** (not transmitting)
+- Reset button doing nothing (the button is read by the firmware, not the hardware)
+
+On the UART console:
 
 ```
 Booting...
@@ -21,73 +23,73 @@ rootfs checksum error at 0021D012!
 <RealTek>
 ```
 
-O rootfs estava truncado: o superblock do squashfs dizia 3,39 MB, mas a partir de
-`0x220000` a flash era só `0xFF`.
+The rootfs was truncated: the squashfs superblock said 3.39 MB, but from `0x220000`
+onwards the flash was all `0xFF`.
 
-## 2. UART (console serial)
+## 2. UART (serial console)
 
-**O que é:** a UART é o console de texto do aparelho. Ela funciona desde o bootloader,
-independente de rede ou sistema — é como "plugar um teclado e um monitor" na placa. Com
-a flash corrompida, foi o único jeito de ver o erro (`rootfs checksum error`) e de
-confirmar que o bootloader ainda estava vivo.
+**What it is:** the UART is the device's text console. It works from the bootloader
+onwards, independent of network or OS — like "plugging a keyboard and a monitor" into the
+board. With a corrupted flash it was the only way to see the error
+(`rootfs checksum error`) and to confirm the bootloader was still alive.
 
-**O que você precisa:** um adaptador **USB → serial FTDI232** (FT232RL), daqueles com
-jumper 3,3 V/5 V. Ele aparece no PC como `/dev/ttyUSB0` (Linux) ou `COMx` (Windows) e
-**não** alimenta a placa — o Twibi usa a fonte de 9 V. Configure o jumper em **3,3 V**
-(a placa é 3,3 V; 5 V pode danificar o SoC).
+**What you need:** a **USB → serial FTDI232** adapter (FT232RL), one of those with a
+3.3 V/5 V jumper. It shows up on the PC as `/dev/ttyUSB0` (Linux) or `COMx` (Windows) and
+does **not** power the board — the Twibi uses its 9 V supply. Set the jumper to **3.3 V**
+(the board is 3.3 V; 5 V can damage the SoC).
 
-Pads 2×2 na placa (vista de cima):
+2×2 pads on the board (top view):
 
 <p align="center">
-  <img src="../images/uart-pinout.jpg" width="380" alt="Pinagem do UART">
+  <img src="../images/uart-pinout.jpg" width="380" alt="UART pinout">
 </p>
 
-| Pad | Sinal | Liga no adaptador |
+| Pad | Signal | Adapter side |
 |---|---|---|
 | 1 | GND | GND |
-| 2 | RX (entrada) | TX do adaptador |
-| 3 | VCC 3,3 V | **nada** |
-| 4 | TX (saída) | RX do adaptador |
+| 2 | RX (input) | adapter TX |
+| 3 | VCC 3.3 V | **nothing** |
+| 4 | TX (output) | adapter RX |
 
-`115200 8N1`. Ligue **o GND primeiro** (sem ele o console fica mudo e a placa pode
-ficar com o RX flutuando, imprimindo `<RealTek>` sem parar). Não ligue o VCC do
-adaptador no pad 3 — o Twibi já é alimentado pela fonte.
+`115200 8N1`. Connect **GND first** (without it the console stays silent and the board's
+RX may float, printing `<RealTek>` endlessly). Do not connect the adapter's VCC to pad 3 —
+the Twibi is already powered by its supply.
 
-Para abrir o console, qualquer terminal serial serve:
+Any serial terminal works:
 
-- Linux: `picocom -b 115200 /dev/ttyUSB0`, `minicom -D /dev/ttyUSB0 -b 115200` ou
+- Linux: `picocom -b 115200 /dev/ttyUSB0`, `minicom -D /dev/ttyUSB0 -b 115200` or
   `screen /dev/ttyUSB0 115200`
-- Windows: PuTTY em modo Serial, 115200, 8N1
-- O projeto completo inclui `tools/uart_console.py` (console com log e comandos via FIFO)
+- Windows: PuTTY in Serial mode, 115200, 8N1
+- The full project includes `tools/uart_console.py` (console with logging and FIFO commands)
 
 ## 3. Disaster mode
 
-1. Desligar a fonte.
-2. Segurar o **reset**.
-3. Ligar a fonte e manter o reset por ~5 s.
-4. Soltar: o console mostra `Entry disaster mode` e o bootloader sobe o TFTP em
-   **`192.168.1.6`** (padrão Realtek).
+1. Power off.
+2. Hold **reset**.
+3. Power on and keep reset held for ~5 s.
+4. Release: the console shows `Entry disaster mode` and the bootloader starts TFTP on
+   **`192.168.1.6`** (Realtek default).
 
-## 4. Enviar a imagem (cabo Ethernet, não UART)
+## 4. Sending the image (Ethernet cable, not UART)
 
-A transferência é feita **pelo cabo de rede**: o PC fica na faixa `192.168.1.0/24`, o
-bootloader escuta TFTP em `192.168.1.6` e recebe o arquivo. A **UART não transporta a
-imagem** — ela serve apenas para ver o console e acompanhar o processo.
+The transfer happens **over the network cable**: the PC sits in `192.168.1.0/24`, the
+bootloader listens for TFTP on `192.168.1.6` and receives the file. The **UART does not
+carry the image** — it is only there to watch the console and follow the process.
 
-O arquivo enviado é o **payload do `.bin` oficial sem o cabeçalho uImage de 64 bytes**:
+The uploaded file is the **official `.bin` payload without the 64-byte uImage header**:
 
 ```bash
-# .bin oficial -> payload
+# official .bin -> payload
 python3 - <<'EOF'
 d = open('twibi_fast_1.1.11.bin','rb').read()
 open('payload.bin','wb').write(d[0x40:])
 EOF
 
-# PC com IP em 192.168.1.0/24, então:
+# PC with an IP in 192.168.1.0/24, then:
 python3 tools/tftp_put.py 192.168.1.6 payload.bin --name payload.bin
 ```
 
-O bootloader reconhece a imagem sozinho:
+The bootloader recognizes the image by itself:
 
 ```
 **TFTP Client Upload File Size = 00615414 Bytes at A0A00000
@@ -102,49 +104,49 @@ burn rootfs Addr:0x00220000! srcAddr:0xa0bf0000 len:0x00425414
 reboot.......
 ```
 
-Não é preciso UART para a transferência — só para acompanhar/diagnosticar. O modo
-disaster é acionado pelo reset no power-on e o TFTP é Ethernet puro.
+UART is not required for the transfer — only to watch/diagnose. Disaster mode is triggered
+by reset at power-on and TFTP is plain Ethernet.
 
-## 5. Layout da flash (8 MB)
+## 5. Flash layout (8 MB)
 
-| Offset | Tamanho | Partição |
+| Offset | Size | Partition |
 |---|---|---|
 | `0x000000` | 128 KB | `Bootloader` |
 | `0x020000` | 64 KB | `CFG` |
-| `0x030000` | 7,5 MB | `KernelFS` (kernel `cr6c` + rootfs) |
-| `0x21D412` | — | início do `RootFS` (squashfs, precedido de assinatura `83 12`) |
-| `0x7C0000` | 64 KB | `CFM` (configuração) |
+| `0x030000` | 7.5 MB | `KernelFS` (`cr6c` kernel + rootfs) |
+| `0x21D412` | — | start of `RootFS` (squashfs, preceded by signature `83 12`) |
+| `0x7C0000` | 64 KB | `CFM` (configuration) |
 | `0x7D0000` | 64 KB | `CFM_BACKUP` |
 | `0x7E0000` | 64 KB | `LOG` |
 | `0x7F0000` | 64 KB | `ENV` |
 
-## 6. O checksum do rootfs
+## 6. The rootfs checksum
 
-O segundo estágio do bootloader (gzip em `0x8D60` do primeiro estágio) foi
-descompactado e descompilado; a função `check_rootfs_image` faz:
+The bootloader's second stage (gzip at `0x8D60` of the first stage) was unpacked and
+decompiled; `check_rootfs_image` does:
 
 ```c
-len = bswap32(*(u32 *)(rootfs + 8)) + 0x282;   // campo big-endian no header do squashfs
+len = bswap32(*(u32 *)(rootfs + 8)) + 0x282;   // big-endian field in the squashfs header
 sum = 0;
 for (i = 0; i < len; i += 2)
-    sum += bswap16(*(u16 *)(rootfs + i));       // soma de 16 bits, big-endian
+    sum += bswap16(*(u16 *)(rootfs + i));       // 16-bit big-endian sum
 if (sum != 0) "rootfs checksum error";
 ```
 
-- O campo em `squashfs+8` (que o squashfs chama de `mkfs_time`) guarda
-  `tamanho_total - 0x282`.
-- Os 2 bytes finais são o complemento que zera a soma.
-- Validado nos dois firmwares (oficial e recuperado): soma = 0.
+- The field at `squashfs+8` (which squashfs calls `mkfs_time`) holds
+  `total_size - 0x282`.
+- The last 2 bytes are the complement that zeroes the sum.
+- Validated on both firmwares (official and recovered): sum = 0.
 
-[`tools/mkimage_twibi.py`](../tools/mkimage_twibi.py) recalcula o campo e o checksum e
-produz a imagem completa (uImage + payload) — o round-trip com o `.bin` oficial é
-byte a byte idêntico.
+[`tools/mkimage_twibi.py`](../tools/mkimage_twibi.py) recomputes the field and the
+checksum and produces the complete image (uImage + payload) — the round-trip against the
+official `.bin` is byte-for-byte identical.
 
-## 7. Observações práticas
+## 7. Practical notes
 
-- O TFTP aceita qualquer nome de arquivo; o que importa é o **conteúdo**.
-- Arquivos pequenos/inválidos (ex.: 5 bytes) são carregados na RAM e ignorados — só uma
-  imagem válida dispara o upgrade.
-- Se o TFTP falhar, o aparelho provavelmente não está em disaster mode: repita o
-  power-on com o reset.
-- Mesmo sem UART dá para gravar: o risco é não ver o que aconteceu.
+- TFTP accepts any filename; what matters is the **content**.
+- Small/invalid files (e.g., 5 bytes) are loaded into RAM and ignored — only a valid image
+  triggers the upgrade.
+- If TFTP fails, the device is probably not in disaster mode: repeat the power-on with
+  reset held.
+- You can flash without UART: the risk is not seeing what happened.
