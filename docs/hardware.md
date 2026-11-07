@@ -31,7 +31,9 @@ Medido em vazio: ~9,35 V. O consumo do aparelho fica abaixo de 1 A.
 
 ## UART
 
-Pads 2×2 na placa, `115200 8N1`:
+O console serial da placa. É acessado com um adaptador **USB → serial FTDI232**, em
+**3,3 V**, ligando apenas **GND, TX e RX** (o VCC do adaptador não é usado — a placa tem
+fonte própria). Pads 2×2, `115200 8N1`:
 
 <p align="center">
   <img src="../images/uart-pinout.jpg" width="380" alt="Pads do UART">

@@ -23,6 +23,50 @@ firmware próprio com SSH, sem nuvem e com controle de internet por faixa de IP.
 
 ---
 
+## Antes de tudo: o que é UART e o que é o FTDI232
+
+**UART** é a "porta serial" do aparelho — um **console de texto** que existe desde o
+primeiro programa (o bootloader), antes de qualquer rede ou sistema operacional. Em vez
+de teclado e monitor, você liga **três fios** (GND, TX, RX) a um adaptador no PC e
+passa a ver e digitar o que o roteador vê durante o boot. É o que salvou este aparelho:
+com a flash corrompida, era o único canal que ainda respondia.
+
+**FTDI232** (chip **FT232RL**) é o **adaptador USB → serial**: de um lado o USB do PC
+(aparece como `/dev/ttyUSB0`), do outro três pinos que vão nos pads da placa. É vendido
+como "adaptador FTDI FT232RL" (aqueles módulos com jumper **3,3 V / 5 V**). Ele **não**
+alimenta a placa: o Twibi usa a própria fonte de 9 V; do adaptador vêm só os sinais.
+
+<p align="center">
+  <img src="images/uart-pads.jpg" width="360" alt="Pads do UART na placa">
+</p>
+
+| Pad da placa | Sinal | Vai no adaptador |
+|---|---|---|
+| 1 | GND | GND (ligue **primeiro**) |
+| 2 | RX (entrada) | TX do adaptador |
+| 3 | VCC 3,3 V | **nada** |
+| 4 | TX (saída) | RX do adaptador |
+
+Detalhes: adaptador em **3,3 V**, console em **115200 8N1**, `TX ↔ RX` cruzados e
+GND comum. Qualquer terminal serial serve (PuTTY, `picocom`, `minicom`, `screen`) — e
+este repo inclui um em Python (`tools/` do projeto completo).
+
+## Glossário rápido
+
+| Termo | O que é |
+|---|---|
+| **UART** | console serial da placa (texto, 3 fios) |
+| **FTDI232** | adaptador USB ↔ serial usado para falar com a UART |
+| **TFTP** | protocolo simples de transferência de arquivo (UDP); o bootloader escuta em `192.168.1.6` |
+| **Bootloader** | primeiro programa da flash: inicializa a RAM, carrega o kernel e tem o modo de recuperação |
+| **uImage** | cabeçalho de 64 bytes que embrulha a imagem do firmware |
+| **squashfs** | sistema de arquivos comprimido e somente-leitura usado no rootfs |
+| **rootfs** | a "raiz" do Linux: todos os arquivos do firmware |
+| **checksum** | soma de verificação que o bootloader usa para validar o rootfs |
+| **CFM** | partição de configuração persistente do firmware (chaves `chave=valor`) |
+
+---
+
 ## Hardware
 
 | Item | Detalhe |

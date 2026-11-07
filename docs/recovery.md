@@ -24,7 +24,17 @@ rootfs checksum error at 0021D012!
 O rootfs estava truncado: o superblock do squashfs dizia 3,39 MB, mas a partir de
 `0x220000` a flash era só `0xFF`.
 
-## 2. UART
+## 2. UART (console serial)
+
+**O que é:** a UART é o console de texto do aparelho. Ela funciona desde o bootloader,
+independente de rede ou sistema — é como "plugar um teclado e um monitor" na placa. Com
+a flash corrompida, foi o único jeito de ver o erro (`rootfs checksum error`) e de
+confirmar que o bootloader ainda estava vivo.
+
+**O que você precisa:** um adaptador **USB → serial FTDI232** (FT232RL), daqueles com
+jumper 3,3 V/5 V. Ele aparece no PC como `/dev/ttyUSB0` (Linux) ou `COMx` (Windows) e
+**não** alimenta a placa — o Twibi usa a fonte de 9 V. Configure o jumper em **3,3 V**
+(a placa é 3,3 V; 5 V pode danificar o SoC).
 
 Pads 2×2 na placa (vista de cima):
 
@@ -39,8 +49,16 @@ Pads 2×2 na placa (vista de cima):
 | 3 | VCC 3,3 V | **nada** |
 | 4 | TX (saída) | RX do adaptador |
 
-`115200 8N1`, adaptador em **3,3 V**. Sem o GND o console fica mudo; com o TX do
-adaptador no pad errado (ex.: VCC) não há resposta.
+`115200 8N1`. Ligue **o GND primeiro** (sem ele o console fica mudo e a placa pode
+ficar com o RX flutuando, imprimindo `<RealTek>` sem parar). Não ligue o VCC do
+adaptador no pad 3 — o Twibi já é alimentado pela fonte.
+
+Para abrir o console, qualquer terminal serial serve:
+
+- Linux: `picocom -b 115200 /dev/ttyUSB0`, `minicom -D /dev/ttyUSB0 -b 115200` ou
+  `screen /dev/ttyUSB0 115200`
+- Windows: PuTTY em modo Serial, 115200, 8N1
+- O projeto completo inclui `tools/uart_console.py` (console com log e comandos via FIFO)
 
 ## 3. Disaster mode
 
