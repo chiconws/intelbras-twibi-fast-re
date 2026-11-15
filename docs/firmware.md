@@ -132,30 +132,28 @@ Implementation notes:
   readable by a logged-in web session) and calls a small backend on `:8080`.
 - Keep `eth0`/`vlan1` untouched: the stock netctrl expects the original bridge layout.
 
-## Why the stock web upgrade rejects the image (errcode 1005)
+## The stock web upgrade: works only with small images
 
-`POST /goform/upgrade` (multipart, field **`upgradeFile`**) accepts the upload (6–7 MB in
-~4 s) and returns `{"errcode":"1005"}` — for the **official 1.1.11 image** and for a
-custom one alike. The front-end only handles three error codes, so it shows an animated
-"Upgrading…" bar even though nothing was written.
+`POST /goform/upgrade` (multipart, field **`upgradeFile`**) returns `{"errcode":"0"}`
+when the upload fits the memory check, and `1005` when it does not.
 
-The code shows **two independent blockers**:
+- `errcode = |status| + 1000`; `1005` means status `-5`, which `cgi_upgrade` sets only
+  when `cgi_upgrade_upload_file` returns `-2`, i.e. when `have_enough_mem()` fails.
+- That function requires **`2 × content-length + 2 MB`** of free RAM: the upload body is
+  already buffered when it runs. On a 44 MB Twibi with the mesh and cloud up, ~12.7 MB is
+  free after `drop_caches`, so the image must be **≤ ~5.3 MB**.
+- Proved on hardware: a 5,222,400 B image (minimal rootfs + TITB block) uploaded with
+  `errcode 0`, `g_upgrade_flag=1`, `mesh_systool_write_image` erased and wrote the flash,
+  and the device booted the new image. The full Twibify image (6.25 MB) does not fit.
+- The **TITB** block: `netctrl`'s `upgrade_config_from_image` scans `/dev/mtdblock3` in
+  4 KB steps for the magic `"TITB"`, decrypts 0x7FF4 bytes with the RC4 key
+  `Tenda12345678abc` and validates `len` / `crc = sum(bytes) % 1000`; on success it writes
+  `/webroot/default.cfg`. `tools/mktitb.py` builds the block, but the device still logged
+  `len = 0, crc = 0` — the placement/format needs more work and it is **not required to
+  flash** (the write happens regardless).
 
-1. **Memory.** `errcode = |status| + 1000`; `1005` means status `-5`, which
-   `cgi_upgrade` sets only when `cgi_upgrade_upload_file` returns `-2`, i.e. when
-   `have_enough_mem()` fails. That function requires **`content-length + 2 MB`** of free
-   RAM after dropping caches and killing `smbd`/`nmbd`/`stupid-ftpd`/`minidlna`. The
-   console shows `current remain memory is 8.5 MB / 8.3 MB / 8.1 MB`; a 6.8 MB upload
-   needs 8.8 MB and fails, a 6.4 MB one (official) passes by a hair.
-2. **Packaging.** When memory allows, `netctrl`'s `upgrade_config_from_image` opens
-   `/dev/mtdblock3`, scans it in 4 KB steps for the magic **`"TITB"`**, then *decrypts*
-   a 12-byte header and checks `len`/`crc`. None of the plain `.bin` files (official,
-   Twibify, payloads) contain `"TITB"` — the log then shows
-   `header->len = 0, crc=0x0` / `Length error`. The web upgrade expects a **vendor
-   update package** (image + encrypted TITB config block), not the bootloader image.
-
-So the local web upgrade is not usable with these images: flash via **disaster mode +
-TFTP**, or the cloud OTA (which installs the official firmware).
+So the web upgrade is usable for images up to ~5.3 MB; bigger images go through disaster
+mode + TFTP.
 
 ## Mesh with a modified master
 
