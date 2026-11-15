@@ -66,7 +66,7 @@ Para abrir o console, qualquer terminal serial serve:
 
 1. Desligar a fonte.
 2. Segurar o **reset**.
-3. Ligar a fonte e manter o reset por ~5 s.
+3. Ligar a fonte e manter o reset por ~15 s.
 4. Soltar: o console mostra `Entry disaster mode` e o bootloader sobe o TFTP em
    **`192.168.1.6`** (padrão Realtek).
 

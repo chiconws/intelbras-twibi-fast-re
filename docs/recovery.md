@@ -66,7 +66,7 @@ Any serial terminal works:
 
 1. Power off.
 2. Hold **reset**.
-3. Power on and keep reset held for ~5 s.
+3. Power on and keep reset held for ~15 s.
 4. Release: the console shows `Entry disaster mode` and the bootloader starts TFTP on
    **`192.168.1.6`** (Realtek default).
 
