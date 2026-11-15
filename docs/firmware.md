@@ -132,20 +132,30 @@ Implementation notes:
   readable by a logged-in web session) and calls a small backend on `:8080`.
 - Keep `eth0`/`vlan1` untouched: the stock netctrl expects the original bridge layout.
 
-## The stock web upgrade is a stub
+## Why the stock web upgrade rejects the image (errcode 1005)
 
 `POST /goform/upgrade` (multipart, field **`upgradeFile`**) accepts the upload (6–7 MB in
-~4 s) and returns:
+~4 s) and returns `{"errcode":"1005"}` — for the **official 1.1.11 image** and for a
+custom one alike. The front-end only handles three error codes, so it shows an animated
+"Upgrading…" bar even though nothing was written.
 
-```json
-{"errcode":"1005"}
-```
+The code shows **two independent blockers**:
 
-It does that for the **official 1.1.11 image** and for a custom one alike. The front-end
-only handles three error codes, so it shows an animated "Upgrading…" progress bar even
-though nothing was written. In practice: **there is no local upgrade through the stock
-web UI**; updates are done with disaster mode + TFTP (or the cloud OTA, which installs the
-official firmware).
+1. **Memory.** `errcode = |status| + 1000`; `1005` means status `-5`, which
+   `cgi_upgrade` sets only when `cgi_upgrade_upload_file` returns `-2`, i.e. when
+   `have_enough_mem()` fails. That function requires **`content-length + 2 MB`** of free
+   RAM after dropping caches and killing `smbd`/`nmbd`/`stupid-ftpd`/`minidlna`. The
+   console shows `current remain memory is 8.5 MB / 8.3 MB / 8.1 MB`; a 6.8 MB upload
+   needs 8.8 MB and fails, a 6.4 MB one (official) passes by a hair.
+2. **Packaging.** When memory allows, `netctrl`'s `upgrade_config_from_image` opens
+   `/dev/mtdblock3`, scans it in 4 KB steps for the magic **`"TITB"`**, then *decrypts*
+   a 12-byte header and checks `len`/`crc`. None of the plain `.bin` files (official,
+   Twibify, payloads) contain `"TITB"` — the log then shows
+   `header->len = 0, crc=0x0` / `Length error`. The web upgrade expects a **vendor
+   update package** (image + encrypted TITB config block), not the bootloader image.
+
+So the local web upgrade is not usable with these images: flash via **disaster mode +
+TFTP**, or the cloud OTA (which installs the official firmware).
 
 ## Mesh with a modified master
 
