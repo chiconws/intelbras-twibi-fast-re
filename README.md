@@ -22,6 +22,10 @@ firmware with SSH, no cloud, and per-IP-range internet control.
 - I built a **custom firmware** (`chiconws`) keeping the stock kernel: SSH instead of
   telnet, no cloud/TR-069, custom branding, an IoT IP range with internet on/off, a web
   page and a JSON API.
+- I decoded the internal switch **VLAN** interface and how the driver bridges `eth0.9`
+  (with its limits: no trunk on the LAN port, no MAC-based VLAN).
+- The current firmware is **Twibify** (minimal, cloud kept, SSH, per-MAC IoT group, a page
+  inside the original web UI) — see [`chiconws/twibify`](https://github.com/chiconws/twibify).
 
 ---
 
@@ -197,10 +201,15 @@ Details: [`docs/firmware.md`](docs/firmware.md).
 
 ## Known limitations
 
-- **No 802.1Q VLANs**: the RTL865x switch does routing/NAT **in hardware** and only knows
-  the LAN and the WAN. A separate subnet as a bridge alias only works towards the router
-  itself — forwarded traffic dies in the switch. That is why internet control is done by
-  **IP range on the LAN itself** (iptables).
+- **VLANs: partial.** The switch driver exposes `/proc/net/vlan` and the ASIC VLAN table
+  can be programmed. With VLAN mode on (`echo "1 1" > /proc/net/vlan/vlanEnable`) and
+  `eth0.9` bridged instead of `eth0`, tagged and untagged clients work. But the **LAN port
+  (port 0) cannot join another VLAN** (no trunk on it), there is **no MAC-based VLAN** (the
+  ACL has no VLAN action), and the 3.10 kernel has no bridge VLAN filtering and no
+  ebtables. Details: [`docs/vlan.md`](docs/vlan.md).
+- **The stock web upgrade is a stub**: `POST /goform/upgrade` (multipart field
+  `upgradeFile`) returns `{"errcode":"1005"}` for the official 1.1.11 image **and** for a
+  custom one — local upgrade is disabled in this build.
 - **Temperature**: there is no SoC temperature sensor exposed in Linux. The
   `/proc/wlan0/thermal` (Realtek "thermal meter") is a **relative ADC**, useful for trends,
   not °C.
@@ -214,7 +223,10 @@ Details: [`docs/firmware.md`](docs/firmware.md).
 The images are in [`firmware/`](firmware/):
 
 - **`twibi_fast_1.1.11.bin`** — official (Intelbras) firmware, to restore factory state
-- **`chiconws-v20.bin`** — the custom firmware from this project
+- **`chiconws-v20.bin`** — the custom firmware from this project (legacy)
+
+The current firmware is **Twibify**, in its own repository:
+[`chiconws/twibify`](https://github.com/chiconws/twibify).
 
 Flashing is done via **disaster mode + TFTP**, sending the image **without the 64-byte
 uImage header** (`firmware/README.md` shows the command). Details in
@@ -225,7 +237,8 @@ uImage header** (`firmware/README.md` shows the command). Details in
 ```
 docs/
   recovery.md    recovery (UART, disaster mode, TFTP, checksum)
-  firmware.md    how chiconws was built and flashed
+  firmware.md    how chiconws/Twibify were built and flashed
+  vlan.md        the internal switch VLAN interface and its limits
   hardware.md    board, chips, pinouts, power
 tools/
   mkimage_twibi.py   builds the image with the correct checksum

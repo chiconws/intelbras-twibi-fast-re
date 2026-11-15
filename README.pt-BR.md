@@ -22,6 +22,10 @@ firmware próprio com SSH, sem nuvem e com controle de internet por faixa de IP.
 - Construí um **firmware próprio** (`chiconws`) mantendo o kernel oficial:
   SSH no lugar do telnet, sem nuvem/TR-069, branding próprio, faixa de IP para IoT com
   internet ligável/desligável, página web e API JSON.
+- Decifrei a interface de **VLAN** do switch interno e como o driver faz a bridge do
+  `eth0.9` (com os limites: sem trunk na porta LAN, sem VLAN por MAC).
+- O firmware atual é o **Twibify** (mínimo, nuvem mantida, SSH, grupo IoT por MAC, página
+  dentro da UI original) — veja [`chiconws/twibify`](https://github.com/chiconws/twibify).
 
 ---
 
@@ -198,10 +202,15 @@ Detalhes: [`docs/firmware.pt-BR.md`](docs/firmware.pt-BR.md).
 
 ## Limitações conhecidas
 
-- **Sem VLANs 802.1Q**: o switch RTL865x faz o roteamento/NAT **em hardware** e só
-  conhece a LAN e a WAN. Criar uma sub-rede separada como alias na bridge funciona só
-  para o próprio roteador — tráfego encaminhado morre no switch. Por isso o controle de
-  internet é feito por **faixa de IP na própria LAN** (via iptables).
+- **VLANs: parcial.** O driver expõe `/proc/net/vlan` e a tabela VLAN do ASIC pode ser
+  programada. Com o modo VLAN ligado (`echo "1 1" > /proc/net/vlan/vlanEnable`) e o
+  `eth0.9` na bridge em vez do `eth0`, clientes com e sem tag funcionam. Mas a **porta LAN
+  (porta 0) não entra em outra VLAN** (sem trunk nela), **não existe VLAN por MAC** (o ACL
+  não tem ação de VLAN) e o kernel 3.10 não tem bridge VLAN filtering nem ebtables.
+  Detalhes: [`docs/vlan.pt-BR.md`](docs/vlan.pt-BR.md).
+- **O upgrade local da web original é stub**: `POST /goform/upgrade` (campo multipart
+  `upgradeFile`) devolve `{"errcode":"1005"}` tanto para a imagem oficial 1.1.11 quanto
+  para uma customizada — o upgrade local está desabilitado nesta build.
 - **Temperatura**: não há sensor de temperatura do SoC exposto no Linux. O
   `/proc/wlan0/thermal` (medidor "thermal meter" da Realtek) é um **ADC relativo**, útil
   para tendência, não em °C.
@@ -215,7 +224,10 @@ Detalhes: [`docs/firmware.pt-BR.md`](docs/firmware.pt-BR.md).
 As imagens estão em [`firmware/`](firmware/):
 
 - **`twibi_fast_1.1.11.bin`** — firmware oficial (Intelbras), para restaurar de fábrica
-- **`chiconws-v20.bin`** — o firmware customizado deste projeto
+- **`chiconws-v20.bin`** — o firmware customizado deste projeto (legado)
+
+O firmware atual é o **Twibify**, em repositório próprio:
+[`chiconws/twibify`](https://github.com/chiconws/twibify).
 
 A gravação é pelo **disaster mode + TFTP**, enviando a imagem **sem os 64 bytes do
 cabeçalho uImage** (o `firmware/README.pt-BR.md` mostra o comando). Detalhes em
@@ -226,7 +238,8 @@ cabeçalho uImage** (o `firmware/README.pt-BR.md` mostra o comando). Detalhes em
 ```
 docs/
   recovery.md    recuperação (UART, disaster mode, TFTP, checksum)
-  firmware.md    como o chiconws foi montado e gravado
+  firmware.md    como o chiconws/Twibify foram montados e gravados
+  vlan.md        a interface de VLAN do switch interno e seus limites
   hardware.md    placa, chips, pinagens, alimentação
 tools/
   mkimage_twibi.py   monta a imagem com o checksum correto

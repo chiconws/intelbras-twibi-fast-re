@@ -9,6 +9,9 @@ Dois arquivos, no formato **`.bin` (uImage + payload)** que o firmware oficial u
 | `twibi_fast_1.1.11.bin` | 6.378.580 B | `ec90662d…5ff01` |
 | `chiconws-v20.bin` | 6.566.996 B | `12e71fa6…89a8e` |
 
+O firmware atual, **Twibify**, é distribuído em repositório próprio:
+[`chiconws/twibify`](https://github.com/chiconws/twibify).
+
 ## Qual usar
 
 - **`twibi_fast_1.1.11.bin`** — firmware **oficial da Intelbras** (versão 1.1.11), o

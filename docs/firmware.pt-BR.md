@@ -1,10 +1,12 @@
-# Firmware `chiconws`
+# Firmware: `chiconws` e `Twibify`
 
 [English](firmware.md) | **Português**
 
 Firmware customizado sobre o **rootfs oficial 1.1.11**, mantendo o kernel de fábrica
 (Linux 3.10.90) e as partições. Construído desempacotando o squashfs oficial, editando
-o userland e reempacotando com o checksum correto.
+o userland e reempacotando com o checksum correto. O `chiconws` (v20) foi a primeira
+experiência; o **Twibify** (1.0) é o firmware atual, mínimo, e fica em repositório
+próprio: [`chiconws/twibify`](https://github.com/chiconws/twibify).
 
 ## O que muda
 
@@ -100,3 +102,61 @@ curl -u root:senha http://twibi.lan:8080/api/status
   acessar a internet por nome.
 - O thermal é um medidor relativo da Realtek (`/proc/wlan0/mib_all`), não uma
   temperatura calibrada.
+
+## Twibify (firmware atual)
+
+Derivado mínimo do 1.1.11 oficial — a **nuvem é mantida** (o app continua gerenciando o
+mesh) e só o que é inseguro/indesejado muda:
+
+| Item | Original | Twibify |
+|---|---|---|
+| Acesso remoto | telnet sob demanda | **SSH** (dropbear) |
+| TR-069 (`cwmpd`) | ativo | `cwmpd.en=0`, binário removido |
+| Nuvem (`ucloud`) | ativo | **mantida** (`ucloud.en=1`) |
+| OTA (`sys.itbupgrade`) | ativo | desligado (URL vazia) |
+| Reboot diário 03:00 | ativo | desligado (as duas chaves) |
+| IoT | — | **grupo por MAC** (sem faixa fixa de IP) |
+| UI | — | **página IoT dentro da webui original** (no lugar do TR-069) |
+| Branding | Intelbras | Intelbras + rodapé "firmware paralelo" |
+
+Notas de implementação:
+
+- O `rcS` força `cwmpd.en=0`, `sys.itbupgrade.enable=0` (URL vazia),
+  `sys.schedulereboot.enable=0`, `sched.reboot.enable=0` e `ucloud.en=1` via `cfm`, porque
+  o CMF sobrevive ao flash e manteria os valores antigos.
+- A **senha do root** fica em hash `$1$` (md5crypt) no `/etc/passwd` **e** no
+  `/etc/shadow`. É aplicada **depois** do `cfmd`/`netctrl` (que reescrevem o `/etc/passwd`
+  após o `rcS`) e reaplicada a cada 30 s; o `cfm ssh.pwd` é a fonte da verdade.
+- Chaves SSH: `cfm ssh.key` → `/var/root/.ssh/authorized_keys` (a home do root foi mudada
+  para `/var/root` porque `/` é somente leitura).
+- A página IoT autentica com um **token por boot** em `/webroot/iot.token` (só legível por
+  sessão logada) e chama um backend pequeno na `:8080`.
+- Não mexa no `eth0`/`vlan1`: o netctrl original espera o layout de bridge original.
+
+## O upgrade local da web original é stub
+
+`POST /goform/upgrade` (multipart, campo **`upgradeFile`**) aceita o upload (6–7 MB em
+~4 s) e responde:
+
+```json
+{"errcode":"1005"}
+```
+
+Tanto para a **imagem oficial 1.1.11** quanto para uma customizada. O front-end só trata
+três códigos de erro, então mostra a barra "Atualizando…" animada mesmo sem gravar nada.
+Na prática: **não existe upgrade local pela webui original**; atualiza-se por disaster
+mode + TFTP (ou pelo OTA da nuvem, que instala o firmware oficial).
+
+## Mesh com mestre modificado
+
+O stack de mesh (`mpp`, `nos.ko`, `/proc/mesh/*`, `wl*.mesh.*`) fica **intocado**. Como o
+Twibify é feito da mesma base 1.1.11, espera-se que um node stock pareie normalmente, mas
+isso **não foi testado** — faça em laboratório com um node stock antes de mexer em
+produção.
+
+## Senha do root: a corrida com o `cfmd`
+
+O `dropbear` autentica pelo **`/etc/passwd`** (não pelo `/etc/shadow`) neste firmware. O
+`cfmd`/`netctrl` reescreve o `/etc/passwd` depois do `rcS`, então uma senha aplicada cedo
+demais se perde (sintoma: o console entra em loop `sulogin: no pass` e o SSH recusa tudo).
+A correção é aplicar o hash **depois** dos daemons de config e continuar reaplicando.

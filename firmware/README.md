@@ -9,6 +9,9 @@ Two files, in the **`.bin` (uImage + payload)** format used by the official firm
 | `twibi_fast_1.1.11.bin` | 6,378,580 B | `ec90662d…5ff01` |
 | `chiconws-v20.bin` | 6,566,996 B | `12e71fa6…89a8e` |
 
+The current firmware, **Twibify**, is distributed in its own repository:
+[`chiconws/twibify`](https://github.com/chiconws/twibify).
+
 ## Which one to use
 
 - **`twibi_fast_1.1.11.bin`** — the **official Intelbras firmware** (1.1.11), the starting
@@ -25,7 +28,6 @@ The bootloader accepts the image **without the 64-byte uImage header**. Both fil
 
 ```sh
 python3 -c "d=open('chiconws-v20.bin','rb').read(); open('payload.bin','wb').write(d[0x40:])"
-```
 
 # with the device in disaster mode and the PC in 192.168.1.0/24:
 python3 ../tools/tftp_put.py 192.168.1.6 payload.bin --name payload.bin
